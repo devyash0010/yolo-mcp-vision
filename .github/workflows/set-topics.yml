@@ -1,0 +1,44 @@
+name: Set Repository Topics
+
+# One-off maintenance workflow: stamps the repo with discovery topics via the
+# GitHub API (PATCH /repos/{owner}/{repo}/topics), since topics cannot be set
+# from git. Runs on push and can be triggered manually from the Actions tab.
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  set-topics:
+    name: Stamp GitHub repo topics
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set topics via GitHub API
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.repos.replaceAllTopics({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              names: [
+                "yolo",
+                "mcp",
+                "model-context-protocol",
+                "computer-vision",
+                "object-detection",
+                "ultralytics",
+                "fastapi",
+                "react",
+                "llm-agents",
+                "real-time",
+                "websocket",
+                "artificial-intelligence"
+              ]
+            });
+            console.log("Repository topics updated successfully.");
