@@ -1,0 +1,32 @@
+# Secrets / environment config
+.env
+.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Local database
+*.db
+*.sqlite3
+
+# Node / frontend
+node_modules/
+frontend/dist/
+
+# YOLO model weights (restore with scripts/download_model.py)
+models/*.pt
+backend/models/*.pt
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Local scratch files
+/test_write.txt
+
