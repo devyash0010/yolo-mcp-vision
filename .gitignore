@@ -1,6 +1,5 @@
-# Secrets / environment config
+# Secrets / local environment (keep .env.example tracked as template)
 .env
-.env.example
 
 # Python
 __pycache__/

@@ -450,10 +450,18 @@ yolo-mcp-vision/
 
 ---
 
-## 15. Resume Alignment
+## Built by
 
-This implementation genuinely satisfies the following resume bullet:
+Hey, I'm **Devyash** — I built this over a few weekends because I was tired of sending raw video frames to LLMs and getting vague answers back.
 
-> **YOLO + MCP Computer Vision System | Python, YOLO, PyTorch, Model Context Protocol (MCP), Computer Vision**
-> • Developed a real-time computer vision service combining YOLO object detection with Model Context Protocol (MCP) to provide downstream AI agents with structured spatial context.
+The idea is simple: let YOLO do what it's good at (fast detection), convert that into clean spatial data, and let agents query it like a database instead of guessing from pixels.
+
+If you try it out, start with `python -m backend.app.demo` — it runs on the sample bus video with no GPU needed. Open an issue if something breaks on your machine, happy to help debug.
+
+### What's next
+- RTSP reconnect handling for flaky network cameras
+- Depth estimation so `near` isn't just 2D overlap
+- Smaller edge build for Jetson / Pi
+
+PRs and forks welcome — MIT licensed, do whatever you want with it.
 
