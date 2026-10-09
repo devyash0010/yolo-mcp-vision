@@ -1,0 +1,64 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: yolo-postgres
+    environment:
+      POSTGRES_USER: vision_user
+      POSTGRES_PASSWORD: vision_pass
+      POSTGRES_DB: yolo_vision_db
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vision_user -d yolo_vision_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: yolo-redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    container_name: yolo-backend
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg2://vision_user:vision_pass@postgres:5432/yolo_vision_db
+      HOST: 0.0.0.0
+      PORT: 8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./models:/app/models
+      - ./sample_data:/app/sample_data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/ready"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: yolo-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  pgdata:

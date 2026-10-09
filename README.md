@@ -163,7 +163,7 @@ flowchart LR
 
 ### Clone & Install Backend
 ```bash
-git clone https://github.com/example/yolo-mcp-vision.git
+git clone https://github.com/devyash0010/yolo-mcp-vision.git
 cd yolo-mcp-vision
 
 # Create virtual environment
