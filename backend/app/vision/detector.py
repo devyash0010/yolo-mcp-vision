@@ -98,6 +98,30 @@ class Detector:
         except Exception as e:
             logger.warning("Warmup inference failed (non-critical): %s", str(e))
 
+    def reset_tracking(self) -> None:
+        """
+        Clears persisted ByteTrack state between independent videos/uploads.
+        Without this, `persist=True` leaks track identities from the previous
+        stream into the next one (stale IDs = wrong aggregations).
+        """
+        with self._lock:
+            predictor = getattr(self.model, "predictor", None)
+            if predictor is None:
+                return
+            trackers = getattr(predictor, "trackers", None)
+            if not trackers:
+                return
+            try:
+                for tracker in trackers:
+                    if hasattr(tracker, "reset"):
+                        tracker.reset()
+                    else:
+                        # No reset API — drop state so ultralytics recreates trackers.
+                        del predictor.trackers
+                        break
+            except Exception as e:
+                logger.debug("ByteTrack reset skipped: %s", str(e))
+
     def detect(
         self, frame: np.ndarray, track: bool = False
     ) -> Tuple[List[Detection], ProcessingMetrics]:

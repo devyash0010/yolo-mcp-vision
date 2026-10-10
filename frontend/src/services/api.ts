@@ -155,7 +155,11 @@ export async function uploadVideo(
   success: boolean;
   filename: string;
   frames_analyzed: number;
+  frames_sampled?: number;
+  frames_skipped_blur?: number;
   total_detections: number;
+  raw_detections?: number;
+  filtered_detections?: number;
   latest_scene?: SceneContext;
 }> {
   const formData = new FormData();

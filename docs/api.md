@@ -89,7 +89,40 @@ Uploads an image file or provides a local path for YOLO object detection.
 ```
 
 ### `POST /api/v1/detection/video`
-Uploads a video (`.mp4`, `.avi`, `.mov`) and processes sampled frames.
+Uploads a video (`.mp4`, `.avi`, `.mov`) and processes sampled frames with an
+accuracy-first pipeline (whole-video sampling, blur rejection, tracker reset,
+cross-frame track-id voting). Response includes both the aggregated scene and
+per-run accuracy stats:
+
+```json
+{
+  "success": true,
+  "filename": "clip.mp4",
+  "frames_analyzed": 12,
+  "frames_sampled": 40,
+  "frames_skipped_blur": 3,
+  "total_detections": 5,
+  "raw_detections": 24,
+  "filtered_detections": 4,
+  "aggregation": {
+    "method": "track_id_persistence",
+    "persistence_min_hits": 2,
+    "high_confidence_keep": 0.85
+  },
+  "per_frame": [{ "frame": 0, "objects": 5 }],
+  "latest_scene": { "..." : "aggregated SceneContext" }
+}
+```
+
+- `frames_sampled` — target frames spread evenly across the **entire** video
+  (not just the first `frame_step * max_frames` frames).
+- `frames_skipped_blur` — defocused frames rejected via Laplacian variance
+  before inference.
+- `total_detections` — **unique** kept objects after cross-frame voting (not a
+  sum across frames). `raw_detections` is the pre-vote total;
+  `filtered_detections` is the count of one-frame false positives removed.
+
+Form fields: `file`, `frame_step` (default `5`), `max_frames` (default `60`).
 
 ### `POST /api/v1/detection/frame`
 Single live-frame inference used by the dashboard's webcam mode.

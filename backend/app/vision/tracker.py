@@ -49,6 +49,10 @@ class ObjectTracker:
         self.tracks: Dict[int, TrackHistory] = {}
         self.max_idle_seconds = max_idle_seconds
 
+    def reset(self) -> None:
+        """Clears all trajectory history (call between videos/uploads)."""
+        self.tracks.clear()
+
     def update_tracks(self, detections: List[Detection]) -> List[Detection]:
         """Updates movement vectors on detections that carry a track_id."""
         now = time.time()

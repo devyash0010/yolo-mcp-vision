@@ -32,7 +32,14 @@ export const VideoViewer: React.FC<VideoViewerProps> = ({
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [mediaSource, setMediaSource] = useState<"sample" | "upload" | "video" | "webcam">("sample");
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [videoStats, setVideoStats] = useState<{ filename: string; frames: number; detections: number } | null>(null);
+  const [videoStats, setVideoStats] = useState<{
+    filename: string;
+    frames: number;
+    detections: number;
+    raw: number;
+    filtered: number;
+    blurSkipped: number;
+  } | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -92,6 +99,9 @@ export const VideoViewer: React.FC<VideoViewerProps> = ({
           filename: file.name,
           frames: res.frames_analyzed,
           detections: res.total_detections,
+          raw: res.raw_detections ?? 0,
+          filtered: res.filtered_detections ?? 0,
+          blurSkipped: res.frames_skipped_blur ?? 0,
         });
       }
     } catch (err: any) {
@@ -602,11 +612,15 @@ export const VideoViewer: React.FC<VideoViewerProps> = ({
           )}
           {mediaSource === "video" && videoStats && (
             <>
-              <span className="text-zinc-500 truncate max-w-[140px]">{videoStats.filename}</span>
+              <span className="text-zinc-500 truncate max-w-[120px]">{videoStats.filename}</span>
               <span className="text-zinc-500">FRAMES:</span>
               <span className="text-sky-400">{videoStats.frames}</span>
-              <span className="text-zinc-500">DETS:</span>
+              <span className="text-zinc-500">UNIQUE:</span>
               <span className="text-emerald-400">{videoStats.detections}</span>
+              <span className="text-zinc-500" title="one-frame false positives removed by track voting">GHOSTS:</span>
+              <span className="text-rose-400" title="one-frame false positives removed by track voting">-{videoStats.filtered}</span>
+              <span className="text-zinc-500" title="defocused frames skipped before inference">BLUR:</span>
+              <span className="text-amber-400" title="defocused frames skipped before inference">{videoStats.blurSkipped}</span>
             </>
           )}
           <span className="text-zinc-500">

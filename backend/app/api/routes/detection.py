@@ -3,6 +3,7 @@
 import base64
 import os
 import tempfile
+import time
 from pathlib import Path
 import cv2
 from typing import Optional
@@ -13,7 +14,8 @@ from app.core.exceptions import InvalidMediaError
 from app.core.security import sanitize_filename, validate_file_extension, validate_file_size
 from app.services.detection_service import DetectionService
 from app.services.scene_service import SceneService
-from app.vision.models import SceneContext
+from app.vision.models import ProcessingMetrics, SceneContext
+from app.vision.temporal import aggregate_detections, is_blurry, sample_indices
 
 router = APIRouter(prefix="/detection", tags=["Detection"])
 
@@ -100,8 +102,10 @@ async def detect_video(
     scene_svc: SceneService = Depends(get_scene_service),
 ):
     """
-    Processes an uploaded video file, sampling frames at `frame_step` intervals.
-    Returns per-frame detection summaries and updates the active scene.
+    Processes an uploaded video with accuracy-first sampling:
+    whole-video even sampling, blur rejection, per-upload tracker reset,
+    and cross-frame track-id voting that filters one-frame false positives.
+    Returns the aggregated SceneContext — not just the last sampled frame.
     """
     filename = sanitize_filename(file.filename or "video.mp4")
     validate_file_extension(filename, settings.ALLOWED_VIDEO_EXTENSIONS)
@@ -117,35 +121,90 @@ async def detect_video(
         if not cap.isOpened():
             raise InvalidMediaError("Could not open uploaded video with OpenCV.")
 
-        frames_analyzed = 0
-        total_detections = 0
-        latest_scene: Optional[SceneContext] = None
-        frame_idx = 0
+        # Fresh tracker state — persisted ByteTrack IDs leak between uploads.
+        detection_svc.detector.reset_tracking()
+        detection_svc.tracker.reset()
 
-        while frames_analyzed < max_frames:
-            ret, frame = cap.read()
-            if not ret or frame is None:
-                break
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        targets = sample_indices(total_frames, frame_step, max_frames)
 
-            if frame_idx % frame_step == 0:
+        per_frame = []
+        frame_dets = []
+        blur_skipped = 0
+        inference_total = 0.0
+        frame_shape = None
+        start_ts = time.perf_counter()
+
+        if targets:
+            for idx in targets:
+                cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+                ret, frame = cap.read()
+                if not ret or frame is None:
+                    continue
+                # First frame always accepted; later blurry frames skipped.
+                if frame_dets and is_blurry(frame):
+                    blur_skipped += 1
+                    continue
+                frame_shape = frame.shape
                 scene, _ = detection_svc.process_frame(frame, track=True)
-                latest_scene = scene
-                total_detections += len(scene.objects)
-                frames_analyzed += 1
-
-            frame_idx += 1
+                inference_total += scene.processing.inference_ms or 0.0
+                frame_dets.append((idx, scene.objects))
+                per_frame.append({"frame": idx, "objects": len(scene.objects)})
+        else:
+            # Container without a reliable frame count: sequential fallback.
+            frame_idx = 0
+            while len(frame_dets) < max_frames:
+                ret, frame = cap.read()
+                if not ret or frame is None:
+                    break
+                if frame_idx % max(1, frame_step) == 0:
+                    frame_shape = frame.shape
+                    scene, _ = detection_svc.process_frame(frame, track=True)
+                    inference_total += scene.processing.inference_ms or 0.0
+                    frame_dets.append((frame_idx, scene.objects))
+                    per_frame.append({"frame": frame_idx, "objects": len(scene.objects)})
+                frame_idx += 1
 
         cap.release()
 
-        if latest_scene:
-            scene_svc.set_current_scene(latest_scene)
+        kept, agg_stats = aggregate_detections(frame_dets)
+
+        aggregated_scene: Optional[SceneContext] = None
+        elapsed = time.perf_counter() - start_ts
+        if frame_shape is not None:
+            h, w = frame_shape[:2]
+            avg_infer = inference_total / max(1, len(frame_dets))
+            metrics = ProcessingMetrics(
+                preprocess_ms=0.0,
+                inference_ms=round(avg_infer, 2),
+                postprocess_ms=0.0,
+                total_ms=round(avg_infer, 2),
+                fps=round(len(frame_dets) / elapsed, 1) if elapsed > 0 else 0.0,
+            )
+            aggregated_scene = detection_svc.scene_engine.build_scene(
+                detections=kept,
+                frame_width=w,
+                frame_height=h,
+                processing_metrics=metrics,
+            )
+            scene_svc.set_current_scene(aggregated_scene)
 
         return {
             "success": True,
             "filename": filename,
-            "frames_analyzed": frames_analyzed,
-            "total_detections": total_detections,
-            "latest_scene": latest_scene.model_dump() if latest_scene else None,
+            "frames_analyzed": len(frame_dets),
+            "frames_sampled": len(targets) if targets else len(frame_dets),
+            "frames_skipped_blur": blur_skipped,
+            "total_detections": len(kept),
+            "raw_detections": agg_stats["raw_detections"],
+            "filtered_detections": agg_stats["filtered_detections"],
+            "aggregation": {
+                "method": agg_stats["method"],
+                "persistence_min_hits": agg_stats["persistence_min_hits"],
+                "high_confidence_keep": agg_stats["high_confidence_keep"],
+            },
+            "per_frame": per_frame,
+            "latest_scene": aggregated_scene.model_dump() if aggregated_scene else None,
         }
     finally:
         if os.path.exists(tmp_path):
