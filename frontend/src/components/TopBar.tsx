@@ -26,6 +26,8 @@ export const TopBar: React.FC<TopBarProps> = ({
         return "COMMAND_CENTER_OVERVIEW";
       case "live":
         return "LIVE_VISION_STREAM";
+      case "video":
+        return "VIDEO_SOURCE_PROCESSOR";
       case "scenes":
         return "SCENE_SNAPSHOT_BUFFER";
       case "detections":

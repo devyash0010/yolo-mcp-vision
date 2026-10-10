@@ -125,6 +125,28 @@ export async function detectImagePath(
   return res.json();
 }
 
+export async function detectFrame(
+  frameBlob: Blob,
+  track: boolean = true
+): Promise<{ success: boolean; scene: SceneContext; annotated_image_base64?: string }> {
+  const formData = new FormData();
+  formData.append("file", frameBlob, "frame.jpg");
+  formData.append("track", String(track));
+  formData.append("include_annotated", "false");
+
+  const res = await fetch(`${API_BASE}/detection/frame`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData?.error?.message || errData?.detail || "Live frame detection failed");
+  }
+
+  return res.json();
+}
+
 export async function uploadVideo(
   file: File,
   frameStep: number = 5,

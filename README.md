@@ -142,6 +142,7 @@ flowchart LR
 ## 4. Key Features
 
 - **Multi-Source Ingestion**: Unified `FrameSource` interface supporting USB webcams, RTSP network streams, static images, and video files.
+- **Live Webcam Inference in the Dashboard**: the VIDEO tab streams browser camera frames to `POST /api/v1/detection/frame` at ~2.5 FPS and renders YOLO boxes, tracker IDs, and confidence labels on a canvas overlay — plus local playback + per-upload stats for mounted video files.
 - **Production YOLO Abstraction**: Thread-safe inference, automatic device selection (`auto`, `cpu`, `cuda`), confidence/IoU thresholding, and coordinate bounding.
 - **Deterministic 2D Spatial Engine**:
   - Partitions frame into a 3x3 grid (`top-left`, `top-center`, `top-right`, `center-left`, `center`, `center-right`, `bottom-left`, `bottom-center`, `bottom-right`).

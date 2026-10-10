@@ -3,6 +3,7 @@ import { SystemStatus } from "../types";
 import {
   LayoutDashboard,
   Video,
+  Film,
   Layers,
   Crosshair,
   Terminal,
@@ -13,6 +14,7 @@ import {
 export type NavTabId =
   | "overview"
   | "live"
+  | "video"
   | "scenes"
   | "detections"
   | "mcp"
@@ -35,6 +37,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const navItems: { id: NavTabId; label: string; icon: React.ComponentType<{ className?: string }>; badge?: string }[] = [
     { id: "overview", label: "OVERVIEW", icon: LayoutDashboard },
     { id: "live", label: "LIVE_VISION", icon: Video, badge: wsConnected ? "STREAM" : undefined },
+    { id: "video", label: "VIDEO", icon: Film },
     { id: "scenes", label: "SCENE_GRAPH", icon: Layers },
     { id: "detections", label: "DETECTIONS", icon: Crosshair },
     { id: "mcp", label: "MCP_TOOLS", icon: Terminal, badge: "11" },

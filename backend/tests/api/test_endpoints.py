@@ -63,6 +63,25 @@ async def test_image_detection_endpoint():
 
 
 @pytest.mark.anyio
+async def test_frame_detection_endpoint():
+    """Single live frame (webcam polling) endpoint returns scene + annotated base64."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        img = np.zeros((120, 160, 3), dtype=np.uint8)
+        _, img_encoded = cv2.imencode(".jpg", img)
+        file_bytes = io.BytesIO(img_encoded.tobytes())
+
+        files = {"file": ("frame.jpg", file_bytes, "image/jpeg")}
+        data = {"track": "true", "include_annotated": "true"}
+        resp = await client.post("/api/v1/detection/frame", files=files, data=data)
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["success"] is True
+        assert payload["scene"]["frame_width"] == 160
+        assert payload["scene"]["frame_height"] == 120
+        assert "annotated_image_base64" in payload
+
+
+@pytest.mark.anyio
 async def test_invalid_image_upload():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         fake_file = io.BytesIO(b"Not an image")

@@ -61,6 +61,36 @@ async def detect_image(
     return resp
 
 
+@router.post("/frame", status_code=status.HTTP_200_OK)
+async def detect_frame(
+    file: UploadFile = File(...),
+    track: bool = Form(default=True),
+    include_annotated: bool = Form(default=True),
+    detection_svc: DetectionService = Depends(get_detection_service),
+    scene_svc: SceneService = Depends(get_scene_service),
+):
+    """
+    Single live frame inference (webcam polling endpoint).
+    Accepts one JPEG frame from the browser camera, runs YOLO + spatial engine,
+    and returns the SceneContext with tracker IDs plus an annotated JPEG base64.
+    Kept separate from /video so polling loops stay lightweight.
+    """
+    content = await file.read()
+    validate_file_size(content)
+
+    scene, annotated_jpg_bytes = detection_svc.process_image_bytes(content, track=track)
+    scene_svc.set_current_scene(scene)
+
+    resp = {
+        "success": True,
+        "scene": scene.model_dump(),
+    }
+    if include_annotated and annotated_jpg_bytes:
+        resp["annotated_image_base64"] = base64.b64encode(annotated_jpg_bytes).decode("utf-8")
+
+    return resp
+
+
 @router.post("/video", status_code=status.HTTP_200_OK)
 async def detect_video(
     file: UploadFile = File(...),

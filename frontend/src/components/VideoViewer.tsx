@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { SceneContext } from "../types";
-import { detectImagePath, uploadImage, uploadVideo } from "../services/api";
+import { detectFrame, detectImagePath, uploadImage, uploadVideo } from "../services/api";
 import {
   Grid,
   Maximize2,
@@ -31,12 +31,20 @@ export const VideoViewer: React.FC<VideoViewerProps> = ({
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [mediaSource, setMediaSource] = useState<"sample" | "upload" | "video" | "webcam">("sample");
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [videoStats, setVideoStats] = useState<{ filename: string; frames: number; detections: number } | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const webcamVideoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
+  const captureCanvasRef = useRef<HTMLCanvasElement>(null);
+  const detectTimerRef = useRef<number | null>(null);
+  const inFlightRef = useRef<boolean>(false);
+  const pausedRef = useRef<boolean>(false);
+  const videoUrlRef = useRef<string | null>(null);
 
   const fps =
     scene?.processing?.fps ??
@@ -48,6 +56,9 @@ export const VideoViewer: React.FC<VideoViewerProps> = ({
     if (!file) return;
     try {
       setIsProcessing(true);
+      stopWebcam();
+      clearOverlay();
+      releaseVideoUrl();
       setMediaSource("upload");
       const res = await uploadImage(file);
       if (res.success && res.scene) {
@@ -65,10 +76,23 @@ export const VideoViewer: React.FC<VideoViewerProps> = ({
     if (!file) return;
     try {
       setIsProcessing(true);
+      stopWebcam();
+      clearOverlay();
+      releaseVideoUrl();
       setMediaSource("video");
+      const url = URL.createObjectURL(file);
+      videoUrlRef.current = url;
+      setVideoUrl(url);
+      setVideoStats(null);
+
       const res = await uploadVideo(file);
       if (res.success && res.latest_scene) {
         onSceneUpdated(res.latest_scene, "");
+        setVideoStats({
+          filename: file.name,
+          frames: res.frames_analyzed,
+          detections: res.total_detections,
+        });
       }
     } catch (err: any) {
       alert(`Video processing failed: ${err.message}`);
@@ -81,6 +105,8 @@ export const VideoViewer: React.FC<VideoViewerProps> = ({
     try {
       setIsProcessing(true);
       stopWebcam();
+      clearOverlay();
+      releaseVideoUrl();
       setMediaSource("sample");
       const res = await detectImagePath("sample_data/bus.jpg");
       if (res.success && res.scene) {
@@ -91,6 +117,117 @@ export const VideoViewer: React.FC<VideoViewerProps> = ({
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const releaseVideoUrl = () => {
+    if (videoUrlRef.current) {
+      URL.revokeObjectURL(videoUrlRef.current);
+      videoUrlRef.current = null;
+    }
+    setVideoUrl(null);
+  };
+
+  const clearOverlay = () => {
+    const canvas = overlayCanvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (canvas && ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+  };
+
+  const drawLiveOverlay = (sc: SceneContext | null) => {
+    const canvas = overlayCanvasRef.current;
+    const video = webcamVideoRef.current;
+    if (!canvas || !video) return;
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!sc || !video.videoWidth || !video.videoHeight) return;
+
+    // object-contain fit of the video inside the viewport
+    const scale = Math.min(canvas.width / video.videoWidth, canvas.height / video.videoHeight);
+    const dw = video.videoWidth * scale;
+    const dh = video.videoHeight * scale;
+    const ox = (canvas.width - dw) / 2;
+    const oy = (canvas.height - dh) / 2;
+    const sx = dw / sc.frame_width;
+    const sy = dh / sc.frame_height;
+
+    // Same palette order as the backend annotate_frame()
+    const colors = ["#2ecc71", "#3498db", "#e74c3c", "#9b59b6", "#f1c40f", "#e67e22", "#1abc9c"];
+
+    ctx.lineWidth = 2;
+    ctx.font = "11px monospace";
+    for (const d of sc.objects) {
+      const color = colors[d.class_id % colors.length];
+      const x1 = ox + d.bbox.x1 * sx;
+      const y1 = oy + d.bbox.y1 * sy;
+      const x2 = ox + d.bbox.x2 * sx;
+      const y2 = oy + d.bbox.y2 * sy;
+      ctx.strokeStyle = color;
+      ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+      ctx.beginPath();
+      ctx.arc((x1 + x2) / 2, (y1 + y2) / 2, 3, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+
+      let label = `${d.class_name} ${Math.round(d.confidence * 100)}%`;
+      if (d.track_id != null) label = `#${d.track_id} ${label}`;
+      const tw = ctx.measureText(label).width;
+      const ly = Math.max(0, y1 - 16);
+      ctx.fillStyle = color;
+      ctx.fillRect(x1, ly, tw + 8, 16);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(label, x1 + 4, ly + 11);
+    }
+  };
+
+  const detectLoop = async () => {
+    if (inFlightRef.current || pausedRef.current || !streamRef.current) return;
+    const video = webcamVideoRef.current;
+    const canvas = captureCanvasRef.current;
+    if (!video || !canvas || !video.videoWidth) return;
+
+    const capW = 640;
+    const capH = Math.round((capW * video.videoHeight) / video.videoWidth);
+    canvas.width = capW;
+    canvas.height = capH;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, capW, capH);
+
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", 0.8)
+    );
+    if (!blob) return;
+
+    inFlightRef.current = true;
+    try {
+      const res = await detectFrame(blob, true);
+      if (res.success && res.scene && streamRef.current) {
+        drawLiveOverlay(res.scene);
+        onSceneUpdated(res.scene, "");
+      }
+    } catch (err) {
+      console.error("Live frame detection failed:", err);
+    } finally {
+      inFlightRef.current = false;
+    }
+  };
+
+  const stopDetectionLoop = () => {
+    if (detectTimerRef.current !== null) {
+      window.clearInterval(detectTimerRef.current);
+      detectTimerRef.current = null;
+    }
+    inFlightRef.current = false;
+  };
+
+  const startDetectionLoop = () => {
+    stopDetectionLoop();
+    detectTimerRef.current = window.setInterval(detectLoop, 400);
   };
 
   const startWebcam = async () => {
@@ -105,6 +242,8 @@ export const VideoViewer: React.FC<VideoViewerProps> = ({
         webcamVideoRef.current.srcObject = stream;
         webcamVideoRef.current.play();
       }
+      clearOverlay();
+      startDetectionLoop();
     } catch (err: any) {
       alert(`Camera access notice: ${err.message || "Could not access webcam"}`);
       setMediaSource("sample");
@@ -114,17 +253,32 @@ export const VideoViewer: React.FC<VideoViewerProps> = ({
   };
 
   const stopWebcam = () => {
+    stopDetectionLoop();
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
+    clearOverlay();
   };
 
   useEffect(() => {
     return () => {
       stopWebcam();
+      if (videoUrlRef.current) URL.revokeObjectURL(videoUrlRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    pausedRef.current = isPaused;
+  }, [isPaused]);
+
+  // Re-attach the camera stream if the <video> element remounts after source switches
+  useEffect(() => {
+    if (mediaSource === "webcam" && streamRef.current && webcamVideoRef.current && !webcamVideoRef.current.srcObject) {
+      webcamVideoRef.current.srcObject = streamRef.current;
+      webcamVideoRef.current.play().catch(() => {});
+    }
+  }, [mediaSource]);
 
   const toggleFullscreen = () => {
     if (!containerRef.current) return;
@@ -136,9 +290,47 @@ export const VideoViewer: React.FC<VideoViewerProps> = ({
   };
 
   const handleDownloadSnapshot = () => {
+    if (mediaSource === "webcam" && webcamVideoRef.current && webcamVideoRef.current.videoWidth) {
+      const video = webcamVideoRef.current;
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.drawImage(video, 0, 0);
+      if (scene && scene.frame_width > 0) {
+        const sx = canvas.width / scene.frame_width;
+        const sy = canvas.height / scene.frame_height;
+        const colors = ["#2ecc71", "#3498db", "#e74c3c", "#9b59b6", "#f1c40f", "#e67e22", "#1abc9c"];
+        ctx.lineWidth = 2;
+        ctx.font = "12px monospace";
+        for (const d of scene.objects) {
+          const color = colors[d.class_id % colors.length];
+          const x1 = d.bbox.x1 * sx;
+          const y1 = d.bbox.y1 * sy;
+          const x2 = d.bbox.x2 * sx;
+          const y2 = d.bbox.y2 * sy;
+          ctx.strokeStyle = color;
+          ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+          let label = `${d.class_name} ${Math.round(d.confidence * 100)}%`;
+          if (d.track_id != null) label = `#${d.track_id} ${label}`;
+          const tw = ctx.measureText(label).width;
+          const ly = Math.max(0, y1 - 16);
+          ctx.fillStyle = color;
+          ctx.fillRect(x1, ly, tw + 8, 16);
+          ctx.fillStyle = "#ffffff";
+          ctx.fillText(label, x1 + 4, ly + 11);
+        }
+      }
+      const a = document.createElement("a");
+      a.href = canvas.toDataURL("image/jpeg");
+      a.download = `live_snapshot_${Date.now()}.jpg`;
+      a.click();
+      return;
+    }
     if (!annotatedImageBase64) return;
     const a = document.createElement("a");
-    a.href = `data:image/jpeg;base64/${annotatedImageBase64}`;
+    a.href = `data:image/jpeg;base64,${annotatedImageBase64}`;
     a.download = `telemetry_snapshot_${Date.now()}.jpg`;
     a.click();
   };
@@ -226,10 +418,26 @@ export const VideoViewer: React.FC<VideoViewerProps> = ({
       {/* Main Canvas Viewport Area */}
       <div className="relative aspect-video w-full bg-[#05070a] flex items-center justify-center overflow-hidden group">
         {mediaSource === "webcam" ? (
+          <>
+            <video
+              ref={webcamVideoRef}
+              autoPlay
+              playsInline
+              muted
+              className="w-full h-full object-contain"
+            />
+            <canvas
+              ref={overlayCanvasRef}
+              className="absolute inset-0 w-full h-full pointer-events-none"
+            />
+          </>
+        ) : mediaSource === "video" && videoUrl ? (
           <video
-            ref={webcamVideoRef}
+            key={videoUrl}
+            src={videoUrl}
+            controls
             autoPlay
-            playsInline
+            loop
             muted
             className="w-full h-full object-contain"
           />
@@ -308,6 +516,9 @@ export const VideoViewer: React.FC<VideoViewerProps> = ({
           </div>
         </div>
 
+        {/* Hidden frame-capture surface for live webcam inference */}
+        <canvas ref={captureCanvasRef} className="hidden" />
+
         {/* Processing Spinner Overlay */}
         {isProcessing && (
           <div className="absolute inset-0 bg-black/70 flex items-center justify-center gap-2 text-xs text-sky-400 font-mono">
@@ -382,8 +593,25 @@ export const VideoViewer: React.FC<VideoViewerProps> = ({
           </button>
         </div>
 
-        <div className="text-[10px] font-mono text-zinc-500">
-          PLANE: {scene?.frame_width || 810}x{scene?.frame_height || 1080} PX
+        <div className="flex items-center gap-3 text-[10px] font-mono">
+          {mediaSource === "webcam" && (
+            <span className="flex items-center gap-1 text-emerald-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              LIVE_YOLO_INFERENCE
+            </span>
+          )}
+          {mediaSource === "video" && videoStats && (
+            <>
+              <span className="text-zinc-500 truncate max-w-[140px]">{videoStats.filename}</span>
+              <span className="text-zinc-500">FRAMES:</span>
+              <span className="text-sky-400">{videoStats.frames}</span>
+              <span className="text-zinc-500">DETS:</span>
+              <span className="text-emerald-400">{videoStats.detections}</span>
+            </>
+          )}
+          <span className="text-zinc-500">
+            PLANE: {scene?.frame_width || 810}x{scene?.frame_height || 1080} PX
+          </span>
         </div>
       </div>
     </div>

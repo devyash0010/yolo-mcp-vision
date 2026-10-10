@@ -3,6 +3,7 @@ import { Sidebar, NavTabId } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
 import { OverviewView } from "./components/OverviewView";
 import { LiveVisionView } from "./components/LiveVisionView";
+import { VideoView } from "./components/VideoView";
 import { ScenesView } from "./components/ScenesView";
 import { DetectionsView } from "./components/DetectionsView";
 import { MCPToolsView } from "./components/MCPToolsView";
@@ -145,6 +146,15 @@ export const App: React.FC = () => {
       case "live":
         return (
           <LiveVisionView
+            scene={scene}
+            annotatedBase64={annotatedBase64}
+            onSceneUpdated={handleSceneUpdated}
+            wsConnected={wsConnected}
+          />
+        );
+      case "video":
+        return (
+          <VideoView
             scene={scene}
             annotatedBase64={annotatedBase64}
             onSceneUpdated={handleSceneUpdated}

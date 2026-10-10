@@ -91,6 +91,18 @@ Uploads an image file or provides a local path for YOLO object detection.
 ### `POST /api/v1/detection/video`
 Uploads a video (`.mp4`, `.avi`, `.mov`) and processes sampled frames.
 
+### `POST /api/v1/detection/frame`
+Single live-frame inference used by the dashboard's webcam mode.
+
+Accepts one JPEG frame (multipart `file`) captured by the browser's
+`getUserMedia` camera at 640px width, runs YOLO with `track=true`, and
+returns the same `scene` + optional `annotated_image_base64` payload as
+`/detection/image`. The frontend polls this endpoint every 400ms and
+draws the returned bounding boxes on a canvas overlay.
+
+**Form fields**: `file` (JPEG frame), `track` (default `true`),
+`include_annotated` (default `true`).
+
 ---
 
 ## 4. Scene Context & Natural Language Reasoning

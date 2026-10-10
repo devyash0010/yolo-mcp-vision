@@ -65,10 +65,11 @@ class DetectionService:
         self,
         image_bytes: bytes,
         scene_id: Optional[str] = None,
+        track: bool = False,
     ) -> Tuple[SceneContext, bytes]:
         """Processes raw encoded image bytes (JPEG/PNG) and returns scene + JPEG annotated bytes."""
         frame = decode_image_bytes(image_bytes)
-        scene, annotated = self.process_frame(frame, track=False, scene_id=scene_id)
+        scene, annotated = self.process_frame(frame, track=track, scene_id=scene_id)
         ret, buf = cv2.imencode(".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, 85])
         if not ret:
             raise DetectionError("Failed to encode annotated frame to JPEG.")
