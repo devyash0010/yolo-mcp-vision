@@ -40,7 +40,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: "video", label: "VIDEO", icon: Film },
     { id: "scenes", label: "SCENE_GRAPH", icon: Layers },
     { id: "detections", label: "DETECTIONS", icon: Crosshair },
-    { id: "mcp", label: "MCP_TOOLS", icon: Terminal, badge: "11" },
+    { id: "mcp", label: "MCP_TOOLS", icon: Terminal, badge: "12" },
     { id: "system", label: "TELEMETRY", icon: Cpu },
     { id: "settings", label: "PARAMETERS", icon: Settings },
   ];

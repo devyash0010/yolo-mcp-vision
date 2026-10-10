@@ -92,6 +92,26 @@ async def test_invalid_image_upload():
 
 
 @pytest.mark.anyio
+async def test_scene_decide_endpoint():
+    """POST /api/v1/scene/decide runs the decision battery with confidence + escalation."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        # A scene must exist (set by the detection tests that run before this one).
+        resp = await client.post("/api/v1/scene/decide")
+        if resp.status_code == 404:
+            pytest.skip("no scene available in this test run")
+        assert resp.status_code == 200
+        report = resp.json()
+        assert report["enabled"] is True
+        assert report["provider"] == "local"
+        assert "cutoff" in report and "latency_ms" in report
+        assert len(report["answers"]) >= 3
+        for a in report["answers"]:
+            assert 0.0 <= a["confidence"] <= 1.0
+            assert a["action"] in ("auto", "review_required")
+            assert "verified_answer" in a
+
+
+@pytest.mark.anyio
 async def test_scene_current_and_query():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.get("/api/v1/scene/current")

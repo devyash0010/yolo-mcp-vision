@@ -56,6 +56,10 @@ export const MCPToolsView: React.FC = () => {
       description: "Evaluates natural language questions against the scene using deterministic intent matching.",
       parameters: { query: "How many people are there?" },
     },
+    {
+      name: "decide_scene",
+      description: "Decision-model battery (Jev/Clef/Laya/local): answers with confidence, cutoff verification, and escalation flags.",
+    },
   ];
 
   const [selectedTool, setSelectedTool] = useState<MCPToolInfo>(tools[0]);

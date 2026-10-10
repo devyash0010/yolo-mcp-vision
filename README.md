@@ -37,7 +37,7 @@
 
 ### Live Vision & MCP Tool Registry
 
-| Live Vision (coordinate inspector) | MCP Tools (11 typed tools) |
+| Live Vision (coordinate inspector) | MCP Tools (12 typed tools) |
 | :---: | :---: |
 | ![Live vision view](docs/assets/dashboard-live_vision.png) | ![MCP tools registry](docs/assets/dashboard-mcp_tools.png) |
 
@@ -148,7 +148,8 @@ flowchart LR
   - Partitions frame into a 3x3 grid (`top-left`, `top-center`, `top-right`, `center-left`, `center`, `center-right`, `bottom-left`, `bottom-center`, `bottom-right`).
   - Computes pairwise 2D relationships: `left_of`, `right_of`, `above`, `below`, `near`, and `inside_of`.
 - **Truthful Spatial Standard**: Strictly computes 2D image plane geometry, clearly distinguished from unverified 3D physical depth.
-- **Official Python MCP Server**: FastMCP implementation exposing 11 typed tools and 5 read-only resources.
+- **Official Python MCP Server**: FastMCP implementation exposing 12 typed tools and 5 read-only resources.
+- **Decision Layer (Jev / Clef / Clef-flash / Laya)**: structured scene questions with confidence scores, a configurable cutoff that escalates unsure answers instead of trusting them, and YOLO ground-truth verification on every answer — provider is a setting (address + key + model), swap without code changes. See [docs/decisions.md](docs/decisions.md).
 - **Deterministic Query Reasoner**: Answers natural language questions ("How many people?", "Where is the bus?") without requiring an LLM or API keys.
 - **Optional LLM Agent Integration**: Grounded `AgentProvider` abstraction supporting Deterministic reasoning, OpenAI (`gpt-4o-mini`), and local Ollama (`llama3.2`).
 - **Real-Time WebSockets**: Low-latency metadata streaming on `/ws/detection` without sending heavy video frames.
@@ -410,11 +411,12 @@ yolo-mcp-vision/
 │   │   │   └── sources.py            # FrameSource (Image, Video, Webcam, RTSP)
 │   │   ├── mcp/
 │   │   │   ├── server.py             # Official FastMCP server
-│   │   │   ├── tools.py              # 11 typed vision tools
+│   │   │   ├── tools.py              # 12 typed vision tools
 │   │   │   ├── resources.py          # 5 visual resources
 │   │   │   └── schemas.py            # Pydantic schemas for MCP
 │   │   ├── agent/
 │   │   │   ├── client.py             # MCP Client & interactive CLI
+│   │   │   ├── decisions.py          # Decision layer (Jev/Clef/Laya) + escalation
 │   │   │   ├── prompts.py            # Grounded agent system prompt
 │   │   │   ├── providers.py          # Deterministic, OpenAI, Ollama providers
 │   │   │   └── reasoning.py          # Rule-based scene reasoning engine

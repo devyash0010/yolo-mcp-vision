@@ -2,6 +2,7 @@
 
 from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 from app.api.dependencies import get_scene_service
 from app.core.exceptions import ResourceNotFoundError
@@ -44,4 +45,21 @@ async def query_scene(
         return scene_svc.query_scene(req.query)
     except ResourceNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.post("/decide", status_code=status.HTTP_200_OK)
+async def decide_scene(scene_svc: SceneService = Depends(get_scene_service)):
+    """
+    Runs the decision-model question battery (Jev / Clef / Clef-flash / Laya / local)
+    over the active scene. Returns per-question answers with confidence scores,
+    cutoff evaluation, YOLO ground-truth verification and escalation flags.
+    Runs the (possibly blocking) provider call in the threadpool.
+    """
+    from app.agent.decisions import decision_engine
+    try:
+        scene = scene_svc.get_current_scene()
+    except ResourceNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    report = await run_in_threadpool(decision_engine.decide, scene)
+    return report.to_dict()
 

@@ -21,6 +21,7 @@ In this platform, the MCP server acts as the **bridge between computer vision pe
 | `get_objects_by_position`| `position` (str) | `{position: str, count: int, objects: list}` | Inspects specific 3x3 grid sector for present objects. |
 | `get_relationships` | `subject` (opt), `relation` (opt) | `{count: int, relationships: list}` | Retrieves 2D relations (`near`, `left_of`, `right_of`, `above`, `below`, `inside_of`). |
 | `query_scene` | `query` (str) | `{query: str, answer: str, matched_intent: str, data: any}` | Evaluates questions deterministically via the rule-based scene reasoning engine. |
+| `decide_scene` | *none* | `{enabled, provider, cutoff, escalation_count, answers: [{id, answer, confidence, trusted, verified_answer, escalated, action}]}` | Runs the decision-model question battery (Jev/Clef/Laya/local) with confidence cutoff, YOLO ground-truth verification, and escalation flags. |
 | `get_detection_metrics`| *none* | Latency, FPS, P50, P95, and request metrics | Observability metrics for vision processing. |
 | `get_system_status` | *none* | Device (CPU/CUDA), active model, health | Runtime hardware diagnostics. |
 

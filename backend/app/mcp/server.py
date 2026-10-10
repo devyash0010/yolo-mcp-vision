@@ -71,6 +71,12 @@ def query_scene(query: str) -> Dict[str, Any]:
 
 
 @mcp_server.tool()
+def decide_scene() -> Dict[str, Any]:
+    """Run the decision-model question battery (Jev/Clef/Laya/local) over the scene; returns answers with confidence, verification, and escalation flags."""
+    return tools.decide_scene()
+
+
+@mcp_server.tool()
 def get_detection_metrics() -> Dict[str, Any]:
     """Get inference latencies (avg, P50, P95), FPS, and detection counts."""
     return tools.get_detection_metrics()

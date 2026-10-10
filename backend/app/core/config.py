@@ -19,6 +19,17 @@ class LLMProviderType(str, Enum):
     OLLAMA = "ollama"
 
 
+class DecisionProviderType(str, Enum):
+    """Configurable decision-model backends (Jev / Clef / Clef-flash / Laya)."""
+
+    NONE = "none"          # decision layer disabled
+    LOCAL = "local"        # offline deterministic oracle (no API key, used for tests)
+    JEV = "jev"            # TypeSafe Jev
+    CLEF = "clef"          # Cloudflare Clef (27B, open weights)
+    CLEF_FLASH = "clef-flash"  # Cloudflare Clef-flash (9B, faster, weaker)
+    LAYA = "laya"          # Convai Laya (self-hosted)
+
+
 class Settings(BaseSettings):
     """Production settings with environment variable parsing and defaults."""
 
@@ -60,6 +71,14 @@ class Settings(BaseSettings):
     OPENAI_MODEL: str = "gpt-4o-mini"
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_MODEL: str = "llama3.2:latest"
+
+    # Decision models (Jev / Clef / Clef-flash / Laya): structured answers + confidence
+    DECISION_PROVIDER: DecisionProviderType = DecisionProviderType.LOCAL
+    DECISION_BASE_URL: Optional[str] = None      # address only — provider is a setting
+    DECISION_API_KEY: Optional[str] = None       # bearer key for hosted endpoints
+    DECISION_MODEL: Optional[str] = None         # e.g. @cf/cloudflare/clef, jev-1, laya-base
+    DECISION_CONFIDENCE_CUTOFF: float = Field(default=0.75, ge=0.0, le=1.0)
+    DECISION_TIMEOUT_SECONDS: float = Field(default=5.0, ge=0.5, le=60.0)
 
     MAX_UPLOAD_SIZE_MB: int = 50
     ALLOWED_IMAGE_EXTENSIONS: List[str] = [".jpg", ".jpeg", ".png", ".bmp", ".webp"]

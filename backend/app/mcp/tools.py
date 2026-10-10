@@ -234,6 +234,25 @@ def query_scene(query: str) -> Dict[str, Any]:
         }
 
 
+def decide_scene() -> Dict[str, Any]:
+    """
+    Runs the decision-model question battery over the current scene.
+    Returns structured answers with confidence scores, cutoff evaluation,
+    vision-ground-truth verification, and escalation flags.
+    Provider (Jev / Clef / Clef-flash / Laya / local) is configuration.
+    """
+    metrics_service.record_mcp_tool("decide_scene")
+    try:
+        scene = scene_service.get_current_scene()
+    except ResourceNotFoundError:
+        return {
+            "enabled": False,
+            "error": "No scene available. Ingest an image or start a stream first.",
+        }
+    from app.agent.decisions import decision_engine
+    return decision_engine.decide(scene).to_dict()
+
+
 def get_detection_metrics() -> Dict[str, Any]:
     """Returns inference latency statistics (avg, P50, P95), FPS, and total detections."""
     metrics_service.record_mcp_tool("get_detection_metrics")
