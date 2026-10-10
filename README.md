@@ -44,6 +44,19 @@
 
 </details>
 
+<details>
+<summary>🖼️ Real-world photos run through the pipeline (<code>sample_data/real.jpeg</code> + <code>sample_data/street.jpg</code>)</summary>
+
+<br>
+
+| House scene (car + person) | Street scene (6 objects) |
+| :---: | :---: |
+| ![House detection](docs/assets/demo-real-detection.jpg) | ![Street detection](docs/assets/demo-street-detection.jpg) |
+
+*Both are real photos (no mockups) processed by `DetectionService.process_frame()` — house scene: `car` 91% + `person` 75% at bottom-center; street scene: `person` 93% center plus cars/motorcycle with grid positions.*
+
+</details>
+
 **Regenerate all demo assets locally:**
 ```bash
 python scripts/generate_demo_assets.py   # annotated still + detection GIF
