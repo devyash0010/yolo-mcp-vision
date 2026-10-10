@@ -29,3 +29,6 @@ Thumbs.db
 # Local scratch files
 /test_write.txt
 
+# Personal LinkedIn upload kit (not part of the project)
+/linkedin-upload-kit/
+
